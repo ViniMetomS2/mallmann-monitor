@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/datajud/(.*)", "destination": "/api/datajud" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
