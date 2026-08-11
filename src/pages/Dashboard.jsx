@@ -1,16 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { RefreshCw, Search, AlertCircle, Bell, CheckCircle } from 'lucide-react'
-import { getProcessos, updateProcesso, addPrazo } from '../lib/storage'
+import { RefreshCw, Search } from 'lucide-react'
+import { getProcessos, updateProcesso, addPrazo } from '../lib/firestoreStorage'
 import { buscarProcesso } from '../lib/datajud'
 import { calcularPrazos, diasRestantes, statusPrazo } from '../lib/prazos'
 
 export default function Dashboard() {
-  const [processos, setProcessos] = useState(() => getProcessos())
+  const [processos, setProcessos] = useState([])
+  const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
   const [atualizando, setAtualizando] = useState(null)
 
-  const reload = () => setProcessos(getProcessos())
+  const reload = useCallback(async () => {
+    const lista = await getProcessos()
+    setProcessos(lista)
+  }, [])
+
+  useEffect(() => {
+    reload().finally(() => setLoading(false))
+  }, [reload])
 
   const filtrados = processos.filter((p) => {
     const q = busca.toLowerCase()
@@ -35,13 +43,13 @@ export default function Dashboard() {
       if (!dados) return
       const p = processos.find((x) => x.numero === numero)
       const houveMudanca = dados.ultimaMov !== p?.ultimaMov
-      updateProcesso(numero, {
+      await updateProcesso(numero, {
         ...dados,
         temNovidade: houveMudanca ? true : (p?.temNovidade || false),
       })
       const prazosNovos = calcularPrazos(dados.movimentacoes)
-      for (const prazo of prazosNovos) addPrazo(numero, prazo)
-      reload()
+      for (const prazo of prazosNovos) await addPrazo(numero, prazo)
+      await reload()
     } catch (err) {
       console.error(err)
     } finally {
@@ -56,7 +64,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>Processos</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {processos.length} processo{processos.length !== 1 ? 's' : ''} monitorado{processos.length !== 1 ? 's' : ''}
+            {loading ? 'Carregando...' : `${processos.length} processo${processos.length !== 1 ? 's' : ''} monitorado${processos.length !== 1 ? 's' : ''}`}
           </p>
         </div>
         <Link to="/adicionar" className="btn-primary">+ Adicionar</Link>
@@ -72,7 +80,9 @@ export default function Dashboard() {
         ].map(({ label, value, color }) => (
           <div key={label} className="card">
             <p className="text-xs uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
-            <p className="text-3xl font-semibold" style={{ color }}>{value}</p>
+            <p className="text-3xl font-semibold" style={{ color }}>
+              {loading ? '—' : value}
+            </p>
           </div>
         ))}
       </div>
@@ -100,7 +110,12 @@ export default function Dashboard() {
           <div>Ações</div>
         </div>
 
-        {filtrados.length === 0 ? (
+        {loading ? (
+          <div className="py-16 text-center" style={{ color: 'var(--text-muted)' }}>
+            <span className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+            Carregando processos...
+          </div>
+        ) : filtrados.length === 0 ? (
           <div className="py-16 text-center" style={{ color: 'var(--text-muted)' }}>
             {processos.length === 0
               ? 'Nenhum processo adicionado ainda.'

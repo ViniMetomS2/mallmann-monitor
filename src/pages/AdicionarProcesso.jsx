@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
 import { buscarProcesso } from '../lib/datajud'
-import { addProcesso, addPrazo } from '../lib/storage'
+import { addProcesso, addPrazo } from '../lib/firestoreStorage'
 import { calcularPrazos } from '../lib/prazos'
 
 export default function AdicionarProcesso() {
@@ -10,6 +10,7 @@ export default function AdicionarProcesso() {
   const [numero, setNumero] = useState('')
   const [nome, setNome] = useState('')
   const [loading, setLoading] = useState(false)
+  const [salvando, setSalvando] = useState(false)
   const [resultado, setResultado] = useState(null)
   const [error, setError] = useState('')
   const [adicionado, setAdicionado] = useState(false)
@@ -33,14 +34,22 @@ export default function AdicionarProcesso() {
     }
   }
 
-  function handleAdicionar() {
+  async function handleAdicionar() {
     if (!resultado) return
-    const ok = addProcesso({ ...resultado, nome: nome.trim() })
-    if (!ok) { setError('Este processo já está sendo monitorado.'); return }
-    const prazos = calcularPrazos(resultado.movimentacoes || [])
-    for (const prazo of prazos) addPrazo(resultado.numero, prazo)
-    setAdicionado(true)
-    setTimeout(() => navigate('/'), 1500)
+    setSalvando(true)
+    setError('')
+    try {
+      const ok = await addProcesso({ ...resultado, nome: nome.trim() })
+      if (!ok) { setError('Este processo já está sendo monitorado.'); return }
+      const prazos = calcularPrazos(resultado.movimentacoes || [])
+      for (const prazo of prazos) await addPrazo(resultado.numero, prazo)
+      setAdicionado(true)
+      setTimeout(() => navigate('/'), 1500)
+    } catch (err) {
+      setError(err.message || 'Erro ao salvar o processo.')
+    } finally {
+      setSalvando(false)
+    }
   }
 
   return (
@@ -85,7 +94,7 @@ export default function AdicionarProcesso() {
       {adicionado && (
         <div className="card mb-4 flex items-center gap-3" style={{ borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.05)' }}>
           <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: '#10b981' }} />
-          <p className="text-sm" style={{ color: '#10b981' }}>Processo adicionado! Redirecionando...</p>
+          <p className="text-sm" style={{ color: '#10b981' }}>Processo salvo na nuvem! Redirecionando...</p>
         </div>
       )}
 
@@ -98,7 +107,14 @@ export default function AdicionarProcesso() {
                 {resultado.tribunal} — {resultado.classe}
               </p>
             </div>
-            <button onClick={handleAdicionar} className="btn-primary flex-shrink-0">+ Monitorar</button>
+            <button
+              onClick={handleAdicionar}
+              disabled={salvando}
+              className="btn-primary flex-shrink-0 disabled:opacity-60 flex items-center gap-2"
+            >
+              {salvando && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {salvando ? 'Salvando...' : '+ Monitorar'}
+            </button>
           </div>
 
           <div className="mb-4">

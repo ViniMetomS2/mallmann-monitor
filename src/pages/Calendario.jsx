@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { getPrazos, getProcessos } from '../lib/storage'
+import { getProcessos } from '../lib/firestoreStorage'
 import { diasRestantes, statusPrazo } from '../lib/prazos'
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -10,10 +10,14 @@ export default function Calendario() {
   const hoje = new Date()
   const [ano, setAno] = useState(hoje.getFullYear())
   const [mes, setMes] = useState(hoje.getMonth())
+  const [processos, setProcessos] = useState([])
 
-  const prazos = getPrazos()
-  const processos = getProcessos()
-  const processosMap = Object.fromEntries(processos.map((p) => [p.numero, p]))
+  useEffect(() => {
+    getProcessos().then(setProcessos)
+  }, [])
+
+  const prazos = useMemo(() => processos.flatMap((p) => p.prazos || []), [processos])
+  const processosMap = useMemo(() => Object.fromEntries(processos.map((p) => [p.numero, p])), [processos])
 
   // Mapa: "YYYY-MM-DD" -> [{ prazo, processo }]
   const prazosMap = useMemo(() => {

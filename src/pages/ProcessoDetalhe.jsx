@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Trash2, Clock } from 'lucide-react'
-import { getProcessos, removeProcesso, updateProcesso, addPrazo } from '../lib/storage'
+import { getProcessos, removeProcesso, updateProcesso, addPrazo } from '../lib/firestoreStorage'
 import { buscarProcesso } from '../lib/datajud'
 import { calcularPrazos, diasRestantes, statusPrazo } from '../lib/prazos'
 
@@ -10,13 +10,19 @@ export default function ProcessoDetalhe() {
   const navigate = useNavigate()
   const numeroDecoded = decodeURIComponent(numero)
   const [processo, setProcesso] = useState(null)
+  const [carregando, setCarregando] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
-    const p = getProcessos().find((x) => x.numero === numeroDecoded)
-    setProcesso(p || null)
-    if (p?.temNovidade) updateProcesso(numeroDecoded, { temNovidade: false })
+    async function load() {
+      const lista = await getProcessos()
+      const p = lista.find((x) => x.numero === numeroDecoded)
+      setProcesso(p || null)
+      if (p?.temNovidade) await updateProcesso(numeroDecoded, { temNovidade: false })
+      setCarregando(false)
+    }
+    load()
   }, [numeroDecoded])
 
   async function handleAtualizar() {
@@ -26,10 +32,11 @@ export default function ProcessoDetalhe() {
       const dados = await buscarProcesso(numeroDecoded)
       if (!dados) { setMsg('❌ Processo não encontrado.'); return }
       const houveMudanca = dados.ultimaMov !== processo?.ultimaMov
-      updateProcesso(numeroDecoded, { ...dados })
+      await updateProcesso(numeroDecoded, { ...dados })
       const prazosNovos = calcularPrazos(dados.movimentacoes)
-      for (const prazo of prazosNovos) addPrazo(numeroDecoded, prazo)
-      const p = getProcessos().find((x) => x.numero === numeroDecoded)
+      for (const prazo of prazosNovos) await addPrazo(numeroDecoded, prazo)
+      const lista = await getProcessos()
+      const p = lista.find((x) => x.numero === numeroDecoded)
       setProcesso(p || null)
       setMsg(houveMudanca ? '🔔 Nova movimentação detectada!' : '✅ Já está atualizado.')
     } catch (err) {
@@ -39,16 +46,30 @@ export default function ProcessoDetalhe() {
     }
   }
 
-  function handleRemover() {
+  async function handleRemover() {
     if (!window.confirm(`Remover processo ${numeroDecoded}?`)) return
-    removeProcesso(numeroDecoded)
+    await removeProcesso(numeroDecoded)
     navigate('/')
+  }
+
+  if (carregando) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <Link to="/" className="flex items-center gap-2 text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </Link>
+        <div className="card text-center py-12" style={{ color: 'var(--text-muted)' }}>
+          <span className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+          Carregando...
+        </div>
+      </div>
+    )
   }
 
   if (!processo) {
     return (
       <div className="max-w-3xl mx-auto">
-        <Link to="/" className="flex items-center gap-2 text-sm mb-6 transition-colors" style={{ color: 'var(--text-muted)' }}>
+        <Link to="/" className="flex items-center gap-2 text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
           <ArrowLeft className="w-4 h-4" /> Voltar
         </Link>
         <div className="card text-center py-12" style={{ color: 'var(--text-muted)' }}>Processo não encontrado.</div>
